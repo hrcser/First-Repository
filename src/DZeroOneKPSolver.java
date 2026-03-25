@@ -5,14 +5,12 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
+import javax.swing.table.TableColumn;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.*;
-import java.text.SimpleDateFormat;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Date;
 import java.util.List;
 
 /**
@@ -37,11 +35,44 @@ public class DZeroOneKPSolver extends JFrame {
     private static final Color COLOR_STATUS_BG   = new Color(52, 73, 94);
     private static final Color COLOR_STATUS_FG   = Color.WHITE;
 
-    private static final Font  FONT_TITLE     = new Font("微软雅黑", Font.BOLD,   18);
-    private static final Font  FONT_UI        = new Font("微软雅黑", Font.PLAIN,  13);
+    private static final Font  FONT_TITLE;
+    private static final Font  FONT_UI;
+    /** 纯数字等宽显示（背包容量等） */
     private static final Font  FONT_MONO      = new Font("Consolas", Font.PLAIN, 13);
-    private static final Font  FONT_TABLE_HDR  = new Font("微软雅黑", Font.BOLD,  12);
-    private static final Font  FONT_TABLE_CELL = new Font("微软雅黑", Font.PLAIN, 12);
+    /** 文本视图/结果区：须含中文，不可用纯西文等宽字体 */
+    private static final Font  FONT_TEXT_AREA;
+    private static final Font  FONT_TABLE_HDR;
+    private static final Font  FONT_TABLE_CELL;
+
+    /** 安全获取中文字体，按优先级遍历并回退到 Dialog（含中文） */
+    private static Font safeChineseFont(float size, int style) {
+        String[] names = {
+            "Microsoft YaHei",
+            "\u5FAE\u8F6F\u96C5\u9ED1",
+            "Source Han Sans",
+            "Noto Sans CJK SC",
+            "WenQuanYi Micro Hei",
+            "SimHei",
+            "sans-serif"
+        };
+        for (String n : names) {
+            try {
+                Font f = new Font(n, style, (int) size);
+                if (f.canDisplay('\u4E00')) {
+                    return f;
+                }
+            } catch (Exception ignored) { }
+        }
+        return new Font(Font.DIALOG, style, (int) size);
+    }
+
+    static {
+        FONT_TITLE     = safeChineseFont(18, Font.BOLD);
+        FONT_UI        = safeChineseFont(13, Font.PLAIN);
+        FONT_TEXT_AREA = safeChineseFont(13, Font.PLAIN);
+        FONT_TABLE_HDR = safeChineseFont(12, Font.BOLD);
+        FONT_TABLE_CELL= safeChineseFont(12, Font.PLAIN);
+    }
 
     // ============ 组件声明 ============
     private JMenuBar menuBar;
@@ -127,7 +158,7 @@ public class DZeroOneKPSolver extends JFrame {
     /**
      * 解决方案类
      */
-    private static class Solution {
+    static class Solution {
         int optimalValue;
         List<Integer> selections;
         long solveTime;
@@ -142,7 +173,7 @@ public class DZeroOneKPSolver extends JFrame {
     /**
      * 动态规划求解器
      */
-    private static class DPSolver {
+    static class DPSolver {
 
         /**
          * 求解D{0-1}背包问题
@@ -213,7 +244,6 @@ public class DZeroOneKPSolver extends JFrame {
         setLocationRelativeTo(null);
 
         initComponents();
-        setupLayout();
         setupEventHandlers();
     }
 
@@ -224,7 +254,7 @@ public class DZeroOneKPSolver extends JFrame {
         btn.setBackground(bg);
         btn.setForeground(fg);
         btn.setFocusPainted(false);
-        btn.setCursor(Cursor.getPreCursor(Cursor.HAND_CURSOR));
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         btn.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(bg.darker(), 1),
                 new EmptyBorder(6, 16, 6, 16)));
@@ -261,7 +291,7 @@ public class DZeroOneKPSolver extends JFrame {
     // ============ 通用文本域（统一样式） ============
     private JTextArea makeTextArea() {
         JTextArea ta = new JTextArea();
-        ta.setFont(FONT_MONO);
+        ta.setFont(FONT_TEXT_AREA);
         ta.setEditable(false);
         ta.setBackground(Color.WHITE);
         ta.setForeground(COLOR_TEXT);
@@ -272,24 +302,54 @@ public class DZeroOneKPSolver extends JFrame {
         return ta;
     }
 
+    // ============ 字符串工具方法 ============
+    private String repeatStr(String s, int count) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < count; i++) sb.append(s);
+        return sb.toString();
+    }
+
     // ============ 通用表格（交替行色 + 美化表头） ============
+    @SuppressWarnings("serial")
     private void styleTable(JTable table) {
         table.setFont(FONT_TABLE_CELL);
-        table.setRowHeight(24);
+        table.setRowHeight(28);
         table.setGridColor(COLOR_BORDER);
         table.setSelectionBackground(new Color(200, 225, 240));
         table.setSelectionForeground(COLOR_TEXT);
         table.setShowGrid(true);
         table.setIntercellSpacing(new Dimension(1, 1));
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
 
         JTableHeader hdr = table.getTableHeader();
         hdr.setFont(FONT_TABLE_HDR);
         hdr.setBackground(COLOR_HEADER_BG);
         hdr.setForeground(COLOR_HEADER_FG);
         hdr.setBorder(BorderFactory.createLineBorder(COLOR_HEADER_BG.darker()));
-        hdr.setPreferredSize(new Dimension(hdr.getPreferredSize().width, 30));
+        hdr.setPreferredSize(new Dimension(hdr.getPreferredSize().width, 32));
 
-        table.setAlternateRowColor(Color.WHITE, new Color(240, 245, 252));
+        int[] colWidths = {70, 80, 80, 80, 80, 80, 80, 100};
+        java.util.Enumeration<?> columns = table.getColumnModel().getColumns();
+        int idx = 0;
+        while (columns.hasMoreElements()) {
+            TableColumn col = (TableColumn) columns.nextElement();
+            col.setPreferredWidth(colWidths[idx++]);
+        }
+
+        table.setDefaultRenderer(Object.class, new javax.swing.table.DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                if (!isSelected) {
+                    c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(240, 245, 252));
+                }
+                c.setForeground(COLOR_TEXT);
+                ((javax.swing.table.DefaultTableCellRenderer) c).setHorizontalAlignment(
+                        column == 0 || column == 7 ? SwingConstants.CENTER : SwingConstants.RIGHT);
+                return c;
+            }
+        });
     }
 
     /**
@@ -404,6 +464,8 @@ public class DZeroOneKPSolver extends JFrame {
         dataTabbedPane.addTab("文本视图", dataScrollPane);
         dataTabbedPane.addTab("表格视图", tableScrollPane);
 
+        scatterPlotPanel = new D01kpScatterPlotPanel();
+
         JPanel plotTab = new JPanel(new BorderLayout());
         plotTab.setBackground(Color.WHITE);
         plotTab.add(scatterPlotPanel, BorderLayout.CENTER);
@@ -445,10 +507,10 @@ public class DZeroOneKPSolver extends JFrame {
         mainPanel = new JPanel(new BorderLayout());
         mainPanel.setBackground(COLOR_BG);
         mainPanel.add(headerPanel, BorderLayout.NORTH);
-        mainPanel.add(controlPanel, BorderLayout.AFTER_HEADER);
+        mainPanel.add(controlPanel, BorderLayout.PAGE_START);
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, true, dataPanel, resultPanel);
-        splitPane.setResizeWeight(0.62);
+        splitPane.setResizeWeight(0.65);
         splitPane.setBorder(null);
         splitPane.setDividerSize(6);
         splitPane.setBackground(COLOR_BORDER);
@@ -460,7 +522,6 @@ public class DZeroOneKPSolver extends JFrame {
 
         itemSets = new ArrayList<>();
         currentSolution = null;
-        scatterPlotPanel = new D01kpScatterPlotPanel();
     }
 
     /**
@@ -526,7 +587,8 @@ public class DZeroOneKPSolver extends JFrame {
      * @throws IllegalArgumentException 数据格式异常
      */
     private void readDataFromFile(File file) throws IOException {
-        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
             String firstLine = reader.readLine();
             if (firstLine == null) {
                 throw new IllegalArgumentException("文件为空");
@@ -581,12 +643,13 @@ public class DZeroOneKPSolver extends JFrame {
      */
     private void updateDataDisplay() {
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("项集数量: %d, 背包容量: %d\n\n", itemSets.size(), capacity));
-        sb.append("项集ID  物品1(价值,重量)  物品2(价值,重量)  物品3(价值,重量)  第三项比值\n");
-        sb.append("─".repeat(90)).append("\n");
+        sb.append(String.format("项集数量: %d, 背包容量: %d%n%n", itemSets.size(), capacity));
+        sb.append(String.format("%-6s %-20s %-20s %-20s %s%n",
+                "项集ID", "物品1(价值,重量)", "物品2(价值,重量)", "物品3(价值,重量)", "第三项比值"));
+        sb.append(repeatStr("=", 90)).append("\n");
 
         for (ItemSet set : itemSets) {
-            sb.append(String.format("%3d     (%4d, %4d)      (%4d, %4d)      (%4d, %4d)      %.4f\n",
+            sb.append(String.format("%-6d (%4d, %4d)      (%4d, %4d)      (%4d, %4d)      %8.4f%n",
                     set.setId,
                     set.items[0].value, set.items[0].weight,
                     set.items[1].value, set.items[1].weight,
@@ -765,7 +828,8 @@ public class DZeroOneKPSolver extends JFrame {
         int result = fileChooser.showSaveDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
             File file = fileChooser.getSelectedFile();
-            try (PrintWriter writer = new PrintWriter(new FileWriter(file))) {
+            try (PrintWriter writer = new PrintWriter(
+                    new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
                 writer.print(resultTextArea.getText());
                 statusLabel.setText("  已保存到: " + file.getName());
                 JOptionPane.showMessageDialog(this, "保存成功！",
