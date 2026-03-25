@@ -46,6 +46,7 @@ public class DZeroOneKPSolver extends JFrame {
     private JButton sortButton;
     private JButton plotButton;
     private JButton saveButton;
+    private JButton backButton;
 
     private JTextArea dataTextArea;
     private JTextArea resultTextArea;
@@ -250,6 +251,8 @@ public class DZeroOneKPSolver extends JFrame {
         sortButton = new JButton("排序");
         plotButton = new JButton("散点图");
         saveButton = new JButton("保存结果");
+        backButton = new JButton("返回");
+        backButton.setVisible(false);
 
         dataTextArea = new JTextArea(10, 40);
         dataTextArea.setEditable(false);
@@ -308,6 +311,7 @@ public class DZeroOneKPSolver extends JFrame {
 
         resultPanel.setBorder(BorderFactory.createTitledBorder("求解结果"));
         resultPanel.add(resultScrollPane, BorderLayout.CENTER);
+        resultPanel.add(backButton, BorderLayout.SOUTH);
 
         mainPanel.add(controlPanel, BorderLayout.NORTH);
 
@@ -337,6 +341,8 @@ public class DZeroOneKPSolver extends JFrame {
 
         saveButton.addActionListener(e -> saveResult());
         saveItem.addActionListener(e -> saveResult());
+
+        backButton.addActionListener(e -> resetToInitialState());
 
         exitItem.addActionListener(e -> System.exit(0));
 
@@ -518,6 +524,17 @@ public class DZeroOneKPSolver extends JFrame {
         sb.append(String.format("背包利用率: %.2f%%%n", (totalWeight * 100.0 / capacity)));
 
         resultTextArea.setText(sb.toString());
+        backButton.setVisible(true);
+    }
+
+    /**
+     * 返回初始界面
+     */
+    private void resetToInitialState() {
+        resultTextArea.setText("");
+        currentSolution = null;
+        backButton.setVisible(false);
+        statusLabel.setText("已返回初始界面");
     }
 
     /**
